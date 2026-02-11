@@ -1,0 +1,44 @@
+# ===== DATA & OUTPUTS (PRIVACY) =====
+# Never commit raw data or predictions with real locations
+data/*.csv
+!data/sample_data.csv
+output/*.csv
+output/evaluation/
+models/*.pkl
+models/*.joblib
+
+# ===== PYTHON =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# ===== VIRTUAL ENVIRONMENTS =====
+.venv/
+venv/
+env/
+ENV/
+
+# ===== JUPYTER =====
+.ipynb_checkpoints/
+*.ipynb
+
+# ===== IDE =====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== MISC =====
+*.log
+*.tmp

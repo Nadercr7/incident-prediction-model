@@ -1,0 +1,125 @@
+g_date,location_name,injury_type_name,vehicle_damage_name,vehicle_collision_type_name
+2023/01/05,LOC_001,No injury,No,Unknown
+2023/01/12,LOC_001,No injury,Yes,Unknown
+2023/01/18,LOC_001,Minor injury,No,Contact with moving vehicle
+2023/02/03,LOC_001,No injury,No,Unknown
+2023/02/14,LOC_001,No injury,Yes,Unknown
+2023/03/01,LOC_001,Minor injury,Yes,Contact with moving vehicle
+2023/03/22,LOC_001,No injury,No,Unknown
+2023/04/10,LOC_001,No injury,No,Unknown
+2023/04/28,LOC_001,No injury,Yes,Unknown
+2023/05/15,LOC_001,Minor injury,No,Contact with moving vehicle
+2023/06/03,LOC_001,No injury,No,Unknown
+2023/06/20,LOC_001,No injury,Yes,Unknown
+2023/07/08,LOC_001,No injury,No,Unknown
+2023/07/25,LOC_001,Minor injury,Yes,Contact with moving vehicle
+2023/08/12,LOC_001,No injury,No,Unknown
+2023/09/01,LOC_001,No injury,No,Unknown
+2023/09/18,LOC_001,No injury,Yes,Unknown
+2023/10/05,LOC_001,Minor injury,No,Contact with moving vehicle
+2023/10/22,LOC_001,No injury,No,Unknown
+2023/11/08,LOC_001,No injury,No,Unknown
+2023/12/15,LOC_001,No injury,Yes,Unknown
+2023/01/08,LOC_002,No injury,No,Unknown
+2023/02/10,LOC_002,No injury,No,Unknown
+2023/03/15,LOC_002,Minor injury,Yes,Contact with moving vehicle
+2023/04/20,LOC_002,No injury,No,Unknown
+2023/05/05,LOC_002,No injury,No,Unknown
+2023/06/12,LOC_002,No injury,Yes,Unknown
+2023/07/18,LOC_002,Minor injury,No,Contact with moving vehicle
+2023/08/22,LOC_002,No injury,No,Unknown
+2023/09/10,LOC_002,No injury,No,Unknown
+2023/10/14,LOC_002,No injury,Yes,Unknown
+2023/11/20,LOC_002,Minor injury,Yes,Contact with moving vehicle
+2023/12/05,LOC_002,No injury,No,Unknown
+2023/12/28,LOC_002,No injury,No,Unknown
+2023/01/15,LOC_003,No injury,No,Unknown
+2023/03/05,LOC_003,No injury,Yes,Unknown
+2023/05/12,LOC_003,Minor injury,No,Contact with moving vehicle
+2023/07/22,LOC_003,No injury,No,Unknown
+2023/09/08,LOC_003,No injury,No,Unknown
+2023/11/14,LOC_003,No injury,Yes,Unknown
+2024/01/10,LOC_001,No injury,No,Unknown
+2024/01/25,LOC_001,No injury,Yes,Unknown
+2024/02/08,LOC_001,Minor injury,No,Contact with moving vehicle
+2024/02/20,LOC_001,No injury,No,Unknown
+2024/03/05,LOC_001,No injury,Yes,Unknown
+2024/03/18,LOC_001,No injury,No,Unknown
+2024/04/02,LOC_001,Minor injury,Yes,Contact with moving vehicle
+2024/04/15,LOC_001,No injury,No,Unknown
+2024/05/01,LOC_001,No injury,No,Unknown
+2024/05/20,LOC_001,Minor injury,No,Contact with moving vehicle
+2024/06/05,LOC_001,No injury,Yes,Unknown
+2024/06/22,LOC_001,No injury,No,Unknown
+2024/07/10,LOC_001,No injury,No,Unknown
+2024/07/28,LOC_001,Minor injury,Yes,Contact with moving vehicle
+2024/08/15,LOC_001,No injury,No,Unknown
+2024/08/30,LOC_001,No injury,No,Unknown
+2024/09/12,LOC_001,No injury,Yes,Unknown
+2024/10/01,LOC_001,Minor injury,No,Contact with moving vehicle
+2024/10/18,LOC_001,No injury,No,Unknown
+2024/11/05,LOC_001,No injury,No,Unknown
+2024/11/22,LOC_001,No injury,Yes,Unknown
+2024/12/10,LOC_001,Minor injury,No,Contact with moving vehicle
+2024/12/28,LOC_001,No injury,No,Unknown
+2024/01/12,LOC_002,No injury,No,Unknown
+2024/02/15,LOC_002,Minor injury,Yes,Contact with moving vehicle
+2024/03/20,LOC_002,No injury,No,Unknown
+2024/04/25,LOC_002,No injury,No,Unknown
+2024/05/10,LOC_002,No injury,Yes,Unknown
+2024/06/15,LOC_002,Minor injury,No,Contact with moving vehicle
+2024/07/20,LOC_002,No injury,No,Unknown
+2024/08/25,LOC_002,No injury,No,Unknown
+2024/09/15,LOC_002,No injury,Yes,Unknown
+2024/10/20,LOC_002,Minor injury,Yes,Contact with moving vehicle
+2024/11/10,LOC_002,No injury,No,Unknown
+2024/12/18,LOC_002,No injury,No,Unknown
+2024/01/20,LOC_003,No injury,No,Unknown
+2024/03/10,LOC_003,No injury,Yes,Unknown
+2024/05/15,LOC_003,Minor injury,No,Contact with moving vehicle
+2024/07/20,LOC_003,No injury,No,Unknown
+2024/09/25,LOC_003,No injury,No,Unknown
+2024/11/30,LOC_003,No injury,Yes,Unknown
+2024/12/15,LOC_003,Minor injury,No,Contact with moving vehicle
+2025/01/08,LOC_001,No injury,No,Unknown
+2025/01/22,LOC_001,No injury,Yes,Unknown
+2025/02/05,LOC_001,Minor injury,No,Contact with moving vehicle
+2025/02/18,LOC_001,No injury,No,Unknown
+2025/03/03,LOC_001,No injury,Yes,Unknown
+2025/03/20,LOC_001,No injury,No,Unknown
+2025/04/08,LOC_001,Minor injury,Yes,Contact with moving vehicle
+2025/04/22,LOC_001,No injury,No,Unknown
+2025/05/10,LOC_001,No injury,No,Unknown
+2025/05/28,LOC_001,Minor injury,No,Contact with moving vehicle
+2025/06/12,LOC_001,No injury,Yes,Unknown
+2025/06/25,LOC_001,No injury,No,Unknown
+2025/07/08,LOC_001,No injury,No,Unknown
+2025/07/22,LOC_001,Minor injury,Yes,Contact with moving vehicle
+2025/08/05,LOC_001,No injury,No,Unknown
+2025/08/20,LOC_001,No injury,No,Unknown
+2025/09/05,LOC_001,No injury,Yes,Unknown
+2025/10/15,LOC_001,Minor injury,No,Contact with moving vehicle
+2025/10/28,LOC_001,No injury,No,Unknown
+2025/11/12,LOC_001,No injury,No,Unknown
+2025/11/28,LOC_001,No injury,Yes,Unknown
+2025/12/10,LOC_001,Minor injury,No,Contact with moving vehicle
+2025/12/22,LOC_001,No injury,No,Unknown
+2025/01/10,LOC_002,No injury,No,Unknown
+2025/02/12,LOC_002,Minor injury,Yes,Contact with moving vehicle
+2025/03/15,LOC_002,No injury,No,Unknown
+2025/04/20,LOC_002,No injury,No,Unknown
+2025/05/08,LOC_002,No injury,Yes,Unknown
+2025/06/10,LOC_002,Minor injury,No,Contact with moving vehicle
+2025/07/15,LOC_002,No injury,No,Unknown
+2025/08/20,LOC_002,No injury,No,Unknown
+2025/09/12,LOC_002,No injury,Yes,Unknown
+2025/10/18,LOC_002,Minor injury,Yes,Contact with moving vehicle
+2025/11/22,LOC_002,No injury,No,Unknown
+2025/12/10,LOC_002,No injury,No,Unknown
+2025/12/28,LOC_002,No injury,No,Unknown
+2025/01/18,LOC_003,No injury,No,Unknown
+2025/03/12,LOC_003,No injury,Yes,Unknown
+2025/05/20,LOC_003,Minor injury,No,Contact with moving vehicle
+2025/07/25,LOC_003,No injury,No,Unknown
+2025/09/30,LOC_003,No injury,No,Unknown
+2025/12/05,LOC_003,No injury,Yes,Unknown
