@@ -115,7 +115,7 @@ python main.py --year 2027                  # different year
 
 ## 👤 Author
 
-**Nader Mohamed** · Data Science Intern · [Zetta Global](https://www.zettaglobal.com/) · February 2026
+**Nader Mohamed** · Data Science Intern · Zetta Global · February 2026
 
 <a href="https://github.com/Nadercr7"><img src="https://img.shields.io/badge/GitHub-Nadercr7-181717?style=flat-square&logo=github" alt="GitHub"></a>
 
