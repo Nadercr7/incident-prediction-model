@@ -1,273 +1,124 @@
 """
-Prediction Module
-=================
-Generates predictions for future periods using the trained
-Gradient Boosting model.
-
-Handles:
-    - Building lag/trend/interaction features for the prediction year
-    - Inverse log-transform to get real incident counts
-    - Summary statistics and distribution analysis
-    - CSV export with anonymized location identifiers
-
-Author: Nader Mohamed
-Date: February 2026
+2026 Prediction — matches notebook cell 19 exactly.
 """
 
-import pandas as pd
 import numpy as np
-from typing import Dict, List, Optional, Any
-import os
-import warnings
-
-warnings.filterwarnings('ignore')
+import pandas as pd
+from typing import List
 
 
-class PredictionGenerator:
-    """
-    Generate predictions for a future year using historical features
-    and the trained model.
-
-    Usage:
-        generator = PredictionGenerator(df_features, feature_cols, trainer)
-        predictions = generator.generate_predictions(2026)
-        generator.save_predictions("output/predictions_2026.csv")
-    """
-
-    def __init__(self, df_features: pd.DataFrame, feature_cols: List[str],
-                 trainer):
-        """
-        Args:
-            df_features: Historical feature DataFrame
-            feature_cols: Selected feature column names
-            trainer: Trained ModelTrainer instance (has .predict() method)
-        """
-        self.df_features = df_features
-        self.feature_cols = feature_cols
-        self.trainer = trainer
-        self.predictions_df = None
-
-    # ------------------------------------------------------------------
-    # Feature Construction for Future Year
-    # ------------------------------------------------------------------
-
-    def create_future_features(self, prediction_year: int = 2026) -> pd.DataFrame:
-        """
-        Build the feature vector for each location for the prediction year.
-
-        Uses the latest available data to shift forward:
-            - Current year's count → lag1
-            - Last year's lag1 → lag2
-            - etc.
-        """
-        print(f"\n[*] Building features for {prediction_year}...")
-
-        locations = self.df_features['location_name'].unique()
-        latest_year = self.df_features['year'].max()
-
-        pred_df = pd.DataFrame({
-            'location_name': locations,
-            'year': prediction_year,
-        })
-
-        for loc in locations:
-            loc_data = self.df_features[
-                self.df_features['location_name'] == loc
-            ].sort_values('year')
-
-            if len(loc_data) == 0:
-                continue
-
-            latest = loc_data[loc_data['year'] == latest_year]
-            if len(latest) == 0:
-                latest = loc_data.iloc[[-1]]
-            latest = latest.iloc[0]
-
-            mask = pred_df['location_name'] == loc
-
-            # --- Lag features ---
-            pred_df.loc[mask, 'incident_count_lag1'] = latest.get('incident_count', 0)
-            pred_df.loc[mask, 'incident_count_lag2'] = latest.get('incident_count_lag1', 0)
-            pred_df.loc[mask, 'incident_count_lag3'] = latest.get('incident_count_lag2', 0)
-
-            pred_df.loc[mask, 'injury_count_lag1'] = latest.get('injury_count', 0)
-            pred_df.loc[mask, 'damage_count_lag1'] = latest.get('damage_count', 0)
-            pred_df.loc[mask, 'collision_count_lag1'] = latest.get('collision_count', 0)
-
-            # --- Transformed lags ---
-            lag1 = latest.get('incident_count', 0)
-            lag2 = latest.get('incident_count_lag1', 0)
-            pred_df.loc[mask, 'lag1_log'] = np.log1p(lag1)
-            pred_df.loc[mask, 'lag1_sqrt'] = np.sqrt(max(0, lag1))
-            pred_df.loc[mask, 'lag1_squared'] = lag1 ** 2
-            pred_df.loc[mask, 'lag1_cubed'] = lag1 ** 3
-            pred_df.loc[mask, 'lag2_log'] = np.log1p(lag2)
-
-            # --- Rolling averages ---
-            lag3 = latest.get('incident_count_lag2', 0)
-            pred_df.loc[mask, 'incident_rolling_avg_2y'] = (lag1 + lag2) / 2
-            pred_df.loc[mask, 'incident_rolling_avg_3y'] = (lag1 + lag2 + lag3) / 3
-
-            # --- Trend ---
-            trend = latest.get('incident_trend', 0)
-            pred_df.loc[mask, 'incident_trend'] = trend
-            pred_df.loc[mask, 'trend_acceleration'] = latest.get('trend_acceleration', 0)
-            pred_df.loc[mask, 'yoy_pct_change'] = latest.get('yoy_pct_change', 0)
-
-            # --- Historical stats ---
-            for col in ['hist_mean_incidents', 'hist_std_incidents',
-                        'hist_max_incidents', 'hist_min_incidents',
-                        'hist_total_incidents',
-                        'hist_avg_injury_rate', 'hist_avg_damage_rate',
-                        'hist_avg_collision_rate', 'cv']:
-                pred_df.loc[mask, col] = latest.get(col, 0)
-
-            # --- Interaction features ---
-            hist_mean = latest.get('hist_mean_incidents', 0)
-            hist_max = latest.get('hist_max_incidents', 0)
-            pred_df.loc[mask, 'weighted_trend'] = trend * np.log1p(lag1)
-            pred_df.loc[mask, 'trend_magnitude'] = abs(trend) * lag1
-            pred_df.loc[mask, 'trend_x_lag1'] = trend * lag1
-            pred_df.loc[mask, 'lag1_x_mean'] = lag1 * hist_mean
-            pred_df.loc[mask, 'lag1_to_mean_ratio'] = lag1 / (hist_mean + 1)
-            pred_df.loc[mask, 'lag1_to_max_ratio'] = lag1 / (hist_max + 1)
-
-            # --- Seasonal ---
-            for col in ['peak_quarter_count', 'seasonal_variance',
-                        'h1_proportion', 'q4_proportion']:
-                pred_df.loc[mask, col] = latest.get(col, 0)
-
-            # --- Momentum ---
-            pred_df.loc[mask, 'lag_diff_12'] = lag1 - lag2
-            pred_df.loc[mask, 'lag_diff_23'] = lag2 - lag3
-
-            # --- Flags ---
-            pred_df.loc[mask, 'high_volume_flag'] = int(lag1 > hist_mean * 1.5)
-            pred_df.loc[mask, 'low_volume_flag'] = int(lag1 < hist_mean * 0.5)
-
-        # Clean up
-        pred_df = pred_df.replace([np.inf, -np.inf], 0).fillna(0)
-        print(f"    Built features for {len(pred_df)} locations")
-
-        return pred_df
-
-    # ------------------------------------------------------------------
-    # Generate Predictions
-    # ------------------------------------------------------------------
-
-    def generate_predictions(self, prediction_year: int = 2026) -> pd.DataFrame:
-        """Generate and store predictions for the given year."""
-        print(f"\n[*] Generating {prediction_year} predictions...")
-
-        pred_df = self.create_future_features(prediction_year)
-
-        # Ensure all required feature columns exist
-        for col in self.feature_cols:
-            if col not in pred_df.columns:
-                pred_df[col] = 0
-
-        X_pred = pred_df[self.feature_cols]
-
-        # Predict (trainer handles log inverse-transform)
-        predictions = self.trainer.predict(X_pred)
-
-        self.predictions_df = pd.DataFrame({
-            'Location': pred_df['location_name'],
-            f'Predicted_Incidents_{prediction_year}': predictions,
-        }).sort_values(
-            f'Predicted_Incidents_{prediction_year}', ascending=False
-        ).reset_index(drop=True)
-
-        total = predictions.sum()
-        print(f"    Predictions generated for {len(self.predictions_df)} locations")
-        print(f"    Total predicted incidents: {total:,}")
-
-        return self.predictions_df
-
-    # ------------------------------------------------------------------
-    # Export & Summary
-    # ------------------------------------------------------------------
-
-    def save_predictions(self, output_path: str):
-        """Save predictions to CSV."""
-        if self.predictions_df is None:
-            raise ValueError("Call generate_predictions() first.")
-
-        os.makedirs(os.path.dirname(output_path) or '.', exist_ok=True)
-        self.predictions_df.to_csv(output_path, index=False)
-        print(f"[+] Predictions saved: {output_path}")
-
-    def get_summary_stats(self) -> Dict[str, float]:
-        """Summary statistics of predictions."""
-        if self.predictions_df is None:
-            raise ValueError("Call generate_predictions() first.")
-
-        pred_col = [c for c in self.predictions_df.columns if 'Predicted' in c][0]
-        vals = self.predictions_df[pred_col]
-
-        return {
-            'total': int(vals.sum()),
-            'locations': len(vals),
-            'mean': round(vals.mean(), 1),
-            'median': round(vals.median(), 1),
-            'std': round(vals.std(), 1),
-            'min': int(vals.min()),
-            'max': int(vals.max()),
-        }
-
-    def get_distribution_tiers(self) -> Dict[str, int]:
-        """Count locations in each prediction tier."""
-        if self.predictions_df is None:
-            raise ValueError("Call generate_predictions() first.")
-
-        pred_col = [c for c in self.predictions_df.columns if 'Predicted' in c][0]
-        vals = self.predictions_df[pred_col]
-
-        return {
-            '200+ incidents': int((vals >= 200).sum()),
-            '100-199 incidents': int(((vals >= 100) & (vals < 200)).sum()),
-            '50-99 incidents': int(((vals >= 50) & (vals < 100)).sum()),
-            '20-49 incidents': int(((vals >= 20) & (vals < 50)).sum()),
-            '<20 incidents': int((vals < 20).sum()),
-        }
-
-    def print_summary(self, n_top: int = 10):
-        """Print prediction summary (no location names for privacy)."""
-        if self.predictions_df is None:
-            raise ValueError("Call generate_predictions() first.")
-
-        stats = self.get_summary_stats()
-        tiers = self.get_distribution_tiers()
-
-        print("\n" + "=" * 50)
-        print("  PREDICTION SUMMARY")
-        print("=" * 50)
-        print(f"  Locations:   {stats['locations']}")
-        print(f"  Total:       {stats['total']:,} predicted incidents")
-        print(f"  Average:     {stats['mean']} per location")
-        print(f"  Median:      {stats['median']}")
-        print(f"  Range:       {stats['min']} - {stats['max']}")
-        print()
-        print("  Distribution:")
-        for tier, count in tiers.items():
-            print(f"    {tier:20s}  {count} locations")
-        print("=" * 50)
-
-
-# Convenience function
-def generate_predictions(
+def predict_2026(
     df_features: pd.DataFrame,
-    feature_cols: List[str],
-    trainer,
-    prediction_year: int = 2026,
-    output_path: Optional[str] = None,
+    gb_model,
+    selected_features: List[str],
+    output_path: str = None,
 ) -> pd.DataFrame:
-    """One-liner to generate and optionally save predictions."""
-    gen = PredictionGenerator(df_features, feature_cols, trainer)
-    predictions = gen.generate_predictions(prediction_year)
-    gen.print_summary()
+    """Generate 2026 predictions using ONLY gb_model (best_weight=0.0)."""
+
+    print("\n" + "=" * 60)
+    print("  2026 PREDICTIONS")
+    print("=" * 60 + "\n")
+
+    # Latest year data
+    data_2025 = df_features[df_features['year'] == 2025].copy()
+
+    # Create 2026 prediction dataframe
+    pred_2026 = data_2025[['location_name']].copy()
+
+    # For lag features: shift values forward
+    # 2025 actual → 2026 lag1, 2024 actual → 2026 lag2
+    for col in selected_features:
+        if 'lag2' in col:
+            lag1_col = col.replace('lag2', 'lag1')
+            if lag1_col in data_2025.columns:
+                pred_2026[col] = data_2025[lag1_col].values
+            else:
+                pred_2026[col] = 0
+        elif '_lag1' in col:
+            base_col = col.replace('_lag1', '')
+            if base_col in data_2025.columns:
+                pred_2026[col] = data_2025[base_col].values
+            elif col in data_2025.columns:
+                pred_2026[col] = data_2025[col].values
+            else:
+                pred_2026[col] = 0
+        else:
+            if col in data_2025.columns:
+                pred_2026[col] = data_2025[col].values
+            else:
+                pred_2026[col] = 0
+
+    # === Recompute derived features for 2026 ===
+
+    # Rate features
+    pred_2026['damage_rate_lag1'] = data_2025['damage_count'].values / (data_2025['incident_count'].values + 1)
+    pred_2026['injury_rate_lag1'] = data_2025['injury_count'].values / (data_2025['incident_count'].values + 1)
+    pred_2026['collision_rate_lag1'] = data_2025['collision_count'].values / (data_2025['incident_count'].values + 1)
+
+    # Growth rate for 2026
+    data_2024_inc = df_features[df_features['year'] == 2024].set_index('location_name')['incident_count']
+    data_2025_inc = data_2025.set_index('location_name')['incident_count']
+    growth = (data_2025_inc - data_2024_inc) / (data_2024_inc + 1)
+    pred_2026['growth_rate'] = pred_2026['location_name'].map(growth).fillna(0).values
+
+    # Trend for 2026
+    trend_2026 = data_2025_inc.subtract(data_2024_inc, fill_value=0)
+    pred_2026['trend'] = pred_2026['location_name'].map(trend_2026).fillna(0).values
+
+    # Historical stats (2023-2025)
+    location_hist_mean = df_features.groupby('location_name')['incident_count'].mean()
+    pred_2026['hist_mean'] = pred_2026['location_name'].map(location_hist_mean).values
+    pred_2026['hist_mean_log'] = np.log1p(pred_2026['hist_mean'].values)
+
+    location_hist_max = df_features.groupby('location_name')['incident_count'].max()
+    pred_2026['hist_max'] = pred_2026['location_name'].map(location_hist_max).values
+
+    location_hist_min = df_features.groupby('location_name')['incident_count'].min()
+    pred_2026['hist_min'] = pred_2026['location_name'].map(location_hist_min).values
+
+    location_hist_std = df_features.groupby('location_name')['incident_count'].std().fillna(0)
+    pred_2026['hist_std'] = pred_2026['location_name'].map(location_hist_std).values
+
+    # Rolling mean 2y
+    rolling_2y = (data_2024_inc.add(data_2025_inc, fill_value=0)) / 2
+    pred_2026['rolling_mean_2y'] = pred_2026['location_name'].map(rolling_2y).fillna(0).values
+
+    # incident_lag1_log
+    pred_2026['incident_lag1_log'] = np.log1p(data_2025['incident_count'].values)
+
+    # Seasonal features
+    q_lag_cols = ['q1_count_lag1', 'q2_count_lag1', 'q3_count_lag1', 'q4_count_lag1']
+    available_q = [c for c in q_lag_cols if c in pred_2026.columns]
+    if len(available_q) >= 2:
+        pred_2026['max_quarter_lag1'] = pred_2026[available_q].max(axis=1)
+        pred_2026['seasonal_var_lag1'] = pred_2026[available_q].std(axis=1)
+        pred_2026['q_ratio_max_lag1'] = pred_2026['max_quarter_lag1'] / (data_2025['incident_count'].values + 1)
+
+    # NOTE: Do NOT recompute interaction/momentum/ratio features here.
+    # The notebook only recomputes the features above; all others keep their
+    # values from the initial loop (copied from data_2025).
+
+    # Ensure all selected features exist
+    X_2026 = pred_2026[selected_features].fillna(0)
+
+    # Generate predictions — pure GB (notebook best_weight=0.0)
+    pred_2026_log = gb_model.predict(X_2026)
+    predictions_2026 = np.maximum(np.expm1(pred_2026_log), 0).round().astype(int)
+
+    # Create output
+    final_predictions = pd.DataFrame({
+        'Location': data_2025['location_name'].values,
+        'Predicted_Incidents_2026': predictions_2026,
+    }).sort_values('Predicted_Incidents_2026', ascending=False)
+
+    print(f"    Total locations: {len(final_predictions)}")
+    print(f"    Total predicted incidents: {final_predictions['Predicted_Incidents_2026'].sum():,}")
+    print(f"    Average per location: {final_predictions['Predicted_Incidents_2026'].mean():.1f}")
+    print(f"\n    Top 10:")
+    print(final_predictions.head(10).to_string(index=False))
 
     if output_path:
-        gen.save_predictions(output_path)
+        final_predictions.to_csv(output_path, index=False)
+        print(f"\n    Saved to: {output_path}")
 
-    return predictions
+    return final_predictions

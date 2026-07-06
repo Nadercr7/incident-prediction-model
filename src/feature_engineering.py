@@ -1,17 +1,5 @@
 """
-Feature Engineering Module
-==========================
-Creates 56 features across 4 categories, then selects the top 20
-via averaged Random Forest + ExtraTrees importance scores.
-
-Feature categories:
-    1. Lag features (raw counts, log, sqrt transforms)
-    2. Trend features (YoY change, acceleration, weighted trend)
-    3. Interaction features (trend × magnitude, ratios)  — key breakthrough
-    4. Historical & seasonal features (rolling avg, CV, quarterly dist)
-
-Author: Nader Mohamed
-Date: February 2026
+Feature Engineering — matches notebook cells 8, 9, 10, 11, 12 exactly.
 """
 
 import pandas as pd
@@ -19,354 +7,274 @@ import numpy as np
 from typing import List, Tuple
 from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
 import warnings
-
 warnings.filterwarnings('ignore')
 
 
 class FeatureEngineer:
-    """
-    Build features for incident prediction from cleaned data.
 
-    Usage:
-        engineer = FeatureEngineer(df_clean)
-        df_features = engineer.build_all_features()
-        features = engineer.select_top_features(target_col='incident_count', n=20)
-    """
-
-    def __init__(self, df: pd.DataFrame):
-        self.df = df
-        self.location_year_agg = None
+    def __init__(self, df_clean: pd.DataFrame):
+        self.df_clean = df_clean
+        self.location_year = None
         self.df_features = None
         self._selected_features = None
 
-    # ==================================================================
-    # Step 1: Location-Year Aggregation
-    # ==================================================================
+    # ==========================================================
+    # Step 1: Aggregate to location × year (notebook cell 8)
+    # ==========================================================
 
-    def create_location_year_aggregation(self) -> pd.DataFrame:
-        """Aggregate raw incidents into location × year rows."""
+    def aggregate_location_year(self) -> pd.DataFrame:
         print("[*] Aggregating by location × year...")
 
-        agg = self.df.groupby(['location_name', 'year']).agg(
+        df = self.df_clean
+
+        location_year = df.groupby(['location_name', 'year']).agg(
             incident_count=('g_date', 'count'),
-            injury_count=('has_injury', 'sum'),
-            damage_count=('has_vehicle_damage', 'sum'),
-            collision_count=('is_collision', 'sum'),
-            peak_month=('month', lambda x: x.mode().iloc[0] if len(x.mode()) > 0 else 6),
-            peak_day=('day_of_week', lambda x: x.mode().iloc[0] if len(x.mode()) > 0 else 3),
+            injury_count=('injury_type_name', lambda x: (x != 'No Injury').sum()),
+            damage_count=('vehicle_damage_name', lambda x: (x != 'No Damage').sum()),
+            collision_count=('vehicle_collision_type_name', lambda x: (x != 'No Collision').sum()),
         ).reset_index()
 
-        # Quarterly distribution
-        quarterly = self.df.groupby(['location_name', 'year', 'quarter']).size().unstack(
-            fill_value=0
-        ).reset_index()
-        quarterly.columns = ['location_name', 'year'] + [f'q{i}_count' for i in range(1, len(quarterly.columns) - 1)]
-        for q in ['q1_count', 'q2_count', 'q3_count', 'q4_count']:
-            if q not in quarterly.columns:
-                quarterly[q] = 0
+        # Quarterly breakdown
+        quarterly_pivot = df.groupby(['location_name', 'year', 'quarter']).size().unstack(fill_value=0)
+        quarterly_pivot.columns = [f'q{q}_count' for q in quarterly_pivot.columns]
+        quarterly_pivot = quarterly_pivot.reset_index()
+        location_year = location_year.merge(quarterly_pivot, on=['location_name', 'year'], how='left')
 
-        agg = agg.merge(quarterly[['location_name', 'year', 'q1_count', 'q2_count', 'q3_count', 'q4_count']],
-                        on=['location_name', 'year'], how='left')
+        # Incident type breakdown
+        type_pivot = df.groupby(['location_name', 'year', 'incident_type_name']).size().unstack(fill_value=0)
+        type_pivot.columns = [f'type_{c.replace(" ", "_").lower()}' for c in type_pivot.columns]
+        type_pivot = type_pivot.reset_index()
+        location_year = location_year.merge(type_pivot, on=['location_name', 'year'], how='left')
 
-        # Rates
-        agg['injury_rate'] = agg['injury_count'] / agg['incident_count'].clip(lower=1)
-        agg['damage_rate'] = agg['damage_count'] / agg['incident_count'].clip(lower=1)
-        agg['collision_rate'] = agg['collision_count'] / agg['incident_count'].clip(lower=1)
+        location_year = location_year.fillna(0)
 
-        self.location_year_agg = agg
-        print(f"    {agg.shape[0]} location-year rows")
-        return agg
+        self.location_year = location_year
+        print(f"    {len(location_year)} location-year rows")
+        return location_year
 
-    # ==================================================================
-    # Step 2: Lag Features
-    # ==================================================================
+    # ==========================================================
+    # Step 2: Create features (notebook cell 9 — exact copy)
+    # ==========================================================
 
-    def create_lag_features(self, max_lag: int = 3) -> pd.DataFrame:
-        """Create lag-1/2/3 for incident, injury, damage, collision counts."""
-        if self.location_year_agg is None:
-            raise ValueError("Run create_location_year_aggregation() first")
+    def create_features(self) -> pd.DataFrame:
+        if self.location_year is None:
+            raise ValueError("Call aggregate_location_year() first")
 
-        print(f"[*] Creating lag features (1-{max_lag})...")
+        print("[*] Creating features...")
+        df = self.location_year
 
-        locations = self.location_year_agg['location_name'].unique()
-        all_years = sorted(self.location_year_agg['year'].unique())
+        locations = df['location_name'].unique()
+        years = sorted(df['year'].unique())
 
-        # Complete grid (all location × year combinations)
+        # Complete location-year grid
         grid = pd.DataFrame(
-            [(loc, yr) for loc in locations for yr in all_years],
-            columns=['location_name', 'year']
+            [(loc, yr) for loc in locations for yr in years],
+            columns=['location_name', 'year'],
         )
-        df = grid.merge(self.location_year_agg, on=['location_name', 'year'], how='left')
+        df_full = grid.merge(df, on=['location_name', 'year'], how='left')
+        numeric_cols = df_full.select_dtypes(include=[np.number]).columns
+        df_full[numeric_cols] = df_full[numeric_cols].fillna(0)
+        df_full = df_full.sort_values(['location_name', 'year']).reset_index(drop=True)
 
-        # Fill missing counts with 0
-        count_cols = ['incident_count', 'injury_count', 'damage_count', 'collision_count']
-        for c in count_cols:
-            if c in df.columns:
-                df[c] = df[c].fillna(0)
+        # === LAG FEATURES (1-2 only, matching notebook) ===
+        for lag in [1, 2]:
+            df_full[f'incident_lag{lag}'] = df_full.groupby('location_name')['incident_count'].shift(lag)
+            df_full[f'injury_lag{lag}'] = df_full.groupby('location_name')['injury_count'].shift(lag)
+            df_full[f'damage_lag{lag}'] = df_full.groupby('location_name')['damage_count'].shift(lag)
+            df_full[f'collision_lag{lag}'] = df_full.groupby('location_name')['collision_count'].shift(lag)
 
-        rate_cols = ['injury_rate', 'damage_rate', 'collision_rate']
-        for c in rate_cols:
-            if c in df.columns:
-                df[c] = df[c].fillna(0)
+        # === RATE FEATURES ===
+        df_full['damage_rate_lag1'] = df_full['damage_lag1'] / (df_full['incident_lag1'] + 1)
+        df_full['injury_rate_lag1'] = df_full['injury_lag1'] / (df_full['incident_lag1'] + 1)
+        df_full['collision_rate_lag1'] = df_full['collision_lag1'] / (df_full['incident_lag1'] + 1)
 
-        df = df.sort_values(['location_name', 'year']).reset_index(drop=True)
+        # === GROWTH FEATURES ===
+        df_full['growth_rate'] = (df_full['incident_lag1'] - df_full['incident_lag2']) / (df_full['incident_lag2'] + 1)
+        df_full['trend'] = df_full.groupby('location_name')['incident_count'].diff().shift(1)
 
-        # Standard lags
-        for lag in range(1, max_lag + 1):
-            for base in count_cols:
-                df[f'{base}_lag{lag}'] = df.groupby('location_name')[base].shift(lag)
-            # Rate lags (lag-1 only for rates)
-            if lag == 1:
-                for rc in rate_cols:
-                    df[f'{rc}_lag1'] = df.groupby('location_name')[rc].shift(1)
-
-        # Transformed lags
-        df['lag1_log'] = np.log1p(df['incident_count_lag1'])
-        df['lag2_log'] = np.log1p(df['incident_count_lag2'])
-        df['lag3_log'] = np.log1p(df.get('incident_count_lag3', 0))
-        df['lag1_sqrt'] = np.sqrt(df['incident_count_lag1'].clip(lower=0))
-        df['lag2_sqrt'] = np.sqrt(df['incident_count_lag2'].clip(lower=0))
-        df['lag3_sqrt'] = np.sqrt(df.get('incident_count_lag3', pd.Series(0)).clip(lower=0))
-        df['lag1_squared'] = df['incident_count_lag1'] ** 2
-        df['lag1_cubed'] = df['incident_count_lag1'] ** 3
-
-        self.df_features = df
-        return df
-
-    # ==================================================================
-    # Step 3: Rolling & Trend Features
-    # ==================================================================
-
-    def create_rolling_and_trend_features(self) -> pd.DataFrame:
-        """Rolling averages, YoY trend, trend acceleration, weighted trend."""
-        if self.df_features is None:
-            raise ValueError("Run create_lag_features() first")
-
-        print("[*] Creating rolling & trend features...")
-        df = self.df_features
-
-        # Rolling averages (shifted to avoid leakage)
-        df['incident_rolling_avg_2y'] = df.groupby('location_name')['incident_count'].transform(
+        # === ROLLING / HISTORICAL STATISTICS ===
+        df_full['rolling_mean_2y'] = df_full.groupby('location_name')['incident_count'].transform(
             lambda x: x.rolling(2, min_periods=1).mean().shift(1)
         )
-        df['incident_rolling_avg_3y'] = df.groupby('location_name')['incident_count'].transform(
-            lambda x: x.rolling(3, min_periods=1).mean().shift(1)
+        df_full['hist_mean'] = df_full.groupby('location_name')['incident_count'].transform(
+            lambda x: x.expanding().mean().shift(1)
+        )
+        df_full['hist_max'] = df_full.groupby('location_name')['incident_count'].transform(
+            lambda x: x.expanding().max().shift(1)
+        )
+        df_full['hist_std'] = df_full.groupby('location_name')['incident_count'].transform(
+            lambda x: x.expanding().std().shift(1)
+        )
+        df_full['hist_min'] = df_full.groupby('location_name')['incident_count'].transform(
+            lambda x: x.expanding().min().shift(1)
         )
 
-        # Year-over-year trend
-        df['incident_trend'] = df.groupby('location_name')['incident_count'].diff().fillna(0)
+        # === LOG FEATURES ===
+        df_full['incident_log'] = np.log1p(df_full['incident_count'])
+        df_full['incident_lag1_log'] = np.log1p(df_full['incident_lag1'])
+        df_full['hist_mean_log'] = df_full.groupby('location_name')['incident_log'].transform(
+            lambda x: x.expanding().mean().shift(1)
+        )
 
-        # Trend acceleration (second derivative)
-        df['trend_acceleration'] = df.groupby('location_name')['incident_trend'].diff().fillna(0)
+        # === SEASONAL FEATURES (lagged quarterly counts) ===
+        for q in ['q1_count', 'q2_count', 'q3_count', 'q4_count']:
+            if q in df_full.columns:
+                df_full[f'{q}_lag1'] = df_full.groupby('location_name')[q].shift(1)
 
-        # YoY percentage change
-        df['yoy_pct_change'] = df.groupby('location_name')['incident_count'].pct_change().fillna(0)
-        df['yoy_pct_change'] = df['yoy_pct_change'].clip(-5, 5)  # cap extreme values
+        q_lag_cols = ['q1_count_lag1', 'q2_count_lag1', 'q3_count_lag1', 'q4_count_lag1']
+        df_full['max_quarter_lag1'] = df_full[q_lag_cols].max(axis=1)
+        df_full['seasonal_var_lag1'] = df_full[q_lag_cols].std(axis=1)
+        df_full['q_ratio_max_lag1'] = df_full['max_quarter_lag1'] / (df_full['incident_lag1'] + 1)
 
-        # Lag differences (momentum)
-        df['lag_diff_12'] = df['incident_count_lag1'] - df['incident_count_lag2']
-        df['lag_diff_23'] = df['incident_count_lag2'] - df.get('incident_count_lag3', 0)
+        # === LAGGED INCIDENT TYPE FEATURES ===
+        type_cols_in_df = [c for c in df_full.columns if c.startswith('type_')]
+        for tc in type_cols_in_df:
+            df_full[f'{tc}_lag1'] = df_full.groupby('location_name')[tc].shift(1)
 
-        self.df_features = df
-        return df
+        # === INTERACTION FEATURES ===
+        df_full['trend_x_lag1'] = df_full['trend'] * df_full['incident_lag1']
+        df_full['trend_x_lag1_log'] = df_full['trend'] * df_full['incident_lag1_log']
+        df_full['trend_x_hist_mean'] = df_full['trend'] * df_full['hist_mean']
+        df_full['trend_positive'] = (df_full['trend'] > 0).astype(int)
+        df_full['trend_abs'] = df_full['trend'].abs()
 
-    # ==================================================================
-    # Step 4: Historical Statistics
-    # ==================================================================
+        # === MOMENTUM FEATURES ===
+        df_full['acceleration'] = df_full.groupby('location_name')['trend'].diff().shift(0)
+        df_full['weighted_trend'] = (
+            0.7 * df_full['trend']
+            + 0.3 * df_full.groupby('location_name')['incident_count'].diff(2).shift(1).fillna(0)
+        )
 
-    def create_historical_stats(self) -> pd.DataFrame:
-        """Per-location historical aggregates (expanding window, no leakage)."""
-        if self.location_year_agg is None:
-            raise ValueError("Run create_location_year_aggregation() first")
+        # === RATIO FEATURES ===
+        df_full['lag1_to_hist_mean'] = df_full['incident_lag1'] / (df_full['hist_mean'] + 1)
+        df_full['lag1_to_hist_max'] = df_full['incident_lag1'] / (df_full['hist_max'] + 1)
+        df_full['range_normalized'] = (
+            (df_full['incident_lag1'] - df_full['hist_min'])
+            / (df_full['hist_max'] - df_full['hist_min'] + 1)
+        )
 
-        print("[*] Creating historical statistics...")
+        # === SEASONAL SHAPE FEATURES ===
+        df_full['q1_share_lag1'] = df_full['q1_count_lag1'] / (df_full['incident_lag1'] + 1)
+        df_full['q2_share_lag1'] = df_full['q2_count_lag1'] / (df_full['incident_lag1'] + 1)
+        df_full['q3_share_lag1'] = df_full['q3_count_lag1'] / (df_full['incident_lag1'] + 1)
+        df_full['q4_share_lag1'] = df_full['q4_count_lag1'] / (df_full['incident_lag1'] + 1)
+        df_full['h1_vs_h2_lag1'] = (
+            (df_full['q1_count_lag1'] + df_full['q2_count_lag1'])
+            / (df_full['q3_count_lag1'] + df_full['q4_count_lag1'] + 1)
+        )
 
-        stats = self.location_year_agg.groupby('location_name').agg(
-            hist_mean_incidents=('incident_count', 'mean'),
-            hist_std_incidents=('incident_count', 'std'),
-            hist_total_incidents=('incident_count', 'sum'),
-            hist_max_incidents=('incident_count', 'max'),
-            hist_min_incidents=('incident_count', 'min'),
-            hist_avg_injury_rate=('injury_rate', 'mean'),
-            hist_avg_damage_rate=('damage_rate', 'mean'),
-            hist_avg_collision_rate=('collision_rate', 'mean'),
-        ).reset_index()
+        # === SQRT FEATURES ===
+        df_full['incident_lag1_sqrt'] = np.sqrt(df_full['incident_lag1'])
+        df_full['hist_mean_sqrt'] = np.sqrt(df_full['hist_mean'])
 
-        stats['hist_std_incidents'] = stats['hist_std_incidents'].fillna(0)
-        stats['cv'] = stats['hist_std_incidents'] / (stats['hist_mean_incidents'] + 1)
+        # === VOLATILITY / STABILITY ===
+        df_full['cv_lag1'] = df_full['hist_std'] / (df_full['hist_mean'] + 1)
+        df_full['stability_score'] = 1 / (1 + df_full['hist_std'])
 
-        if self.df_features is not None:
-            self.df_features = self.df_features.merge(stats, on='location_name', how='left')
+        # === DAMAGE SEVERITY COMPOSITE ===
+        df_full['severity_index_lag1'] = (
+            df_full['damage_rate_lag1'] + df_full['injury_rate_lag1'] + df_full['collision_rate_lag1']
+        ) / 3
 
+        df_full = df_full.fillna(0)
+        self.df_features = df_full
+        print(f"    Feature dataset shape: {df_full.shape}")
+        return df_full
+
+    # ==========================================================
+    # Step 3: High-volume flag (notebook cell 10)
+    # ==========================================================
+
+    def add_high_volume_flag(self) -> pd.DataFrame:
+        if self.df_features is None:
+            raise ValueError("Call create_features() first")
+
+        location_totals = self.df_features.groupby('location_name')['incident_count'].sum()
+        threshold = location_totals.mean() + 2 * location_totals.std()
+        high_volume = location_totals[location_totals > threshold].index.tolist()
+
+        print(f"[*] High-volume locations ({len(high_volume)}): {high_volume}")
+        self.df_features['is_high_volume'] = self.df_features['location_name'].isin(high_volume).astype(int)
         return self.df_features
 
-    # ==================================================================
-    # Step 5: Interaction Features (KEY BREAKTHROUGH)
-    # ==================================================================
+    # ==========================================================
+    # Step 4: Feature selection (notebook cells 11-12)
+    # ==========================================================
 
-    def create_interaction_features(self) -> pd.DataFrame:
-        """
-        Interaction features drove R² from ~0.80 to 0.93.
-        Captures non-linear relationships between trend and magnitude.
-        """
+    def get_feature_columns(self) -> List[str]:
+        """Get all valid feature columns (excluding leakage)."""
         if self.df_features is None:
-            raise ValueError("Run prior steps first")
+            raise ValueError("Call create_features() first")
 
-        print("[*] Creating interaction features (key breakthrough)...")
-        df = self.df_features
+        leakage_cols = [
+            'injury_count', 'damage_count', 'collision_count',
+            'q1_count', 'q2_count', 'q3_count', 'q4_count',
+        ]
+        type_cols_raw = [
+            c for c in self.df_features.columns
+            if c.startswith('type_') and '_lag1' not in c
+        ]
 
-        # Weighted trend: trend weighted by lag magnitude
-        df['weighted_trend'] = df['incident_trend'] * np.log1p(df['incident_count_lag1'])
+        exclude_cols = (
+            ['location_name', 'year', 'incident_count', 'incident_log']
+            + leakage_cols + type_cols_raw
+        )
 
-        # Trend × magnitude product
-        df['trend_magnitude'] = np.abs(df['incident_trend']) * df['incident_count_lag1']
+        feature_cols = [
+            c for c in self.df_features.columns
+            if c not in exclude_cols and self.df_features[c].dtype in ['int64', 'float64']
+        ]
+        return feature_cols
 
-        # Direct interactions
-        df['trend_x_lag1'] = df['incident_trend'] * df['incident_count_lag1']
-        df['lag1_x_mean'] = df['incident_count_lag1'] * df['hist_mean_incidents']
-
-        # Ratio features
-        df['lag1_to_mean_ratio'] = df['incident_count_lag1'] / (df['hist_mean_incidents'] + 1)
-        df['lag1_to_max_ratio'] = df['incident_count_lag1'] / (df['hist_max_incidents'] + 1)
-
-        self.df_features = df
-        return df
-
-    # ==================================================================
-    # Step 6: Seasonal Features
-    # ==================================================================
-
-    def create_seasonal_features(self) -> pd.DataFrame:
-        """Quarterly distributions, peak quarter, half-year proportions."""
-        if self.df_features is None:
-            raise ValueError("Run prior steps first")
-
-        print("[*] Creating seasonal features...")
-        df = self.df_features
-
-        # Ensure quarterly columns exist
-        for q in ['q1_count', 'q2_count', 'q3_count', 'q4_count']:
-            if q not in df.columns:
-                df[q] = 0
-
-        total = (df['q1_count'] + df['q2_count'] + df['q3_count'] + df['q4_count']).clip(lower=1)
-
-        df['peak_quarter_count'] = df[['q1_count', 'q2_count', 'q3_count', 'q4_count']].max(axis=1)
-        df['seasonal_variance'] = df[['q1_count', 'q2_count', 'q3_count', 'q4_count']].var(axis=1).fillna(0)
-
-        df['h1_proportion'] = (df['q1_count'] + df['q2_count']) / total
-        df['h2_proportion'] = (df['q3_count'] + df['q4_count']) / total
-        df['q4_proportion'] = df['q4_count'] / total
-
-        # Volume flags
-        df['high_volume_flag'] = (df['incident_count_lag1'] > df['hist_mean_incidents'] * 1.5).astype(int)
-        df['low_volume_flag'] = (df['incident_count_lag1'] < df['hist_mean_incidents'] * 0.5).astype(int)
-        df['trend_positive_flag'] = (df['incident_trend'] > 0).astype(int)
-        df['trend_negative_flag'] = (df['incident_trend'] < 0).astype(int)
-
-        self.df_features = df
-        return df
-
-    # ==================================================================
-    # Feature Selection
-    # ==================================================================
-
-    def select_top_features(self, target_col: str = 'incident_count',
-                            n: int = 20) -> List[str]:
-        """
-        Select top-N features via averaged RF + ExtraTrees importance.
-
-        This two-model averaging reduces selection bias compared to
-        using a single model's importances.
-        """
+    def select_top_features(self, n: int = 20) -> List[str]:
+        """RF + ExtraTrees averaged importance (notebook cell 12)."""
         if self.df_features is None:
             raise ValueError("Build features first")
 
-        print(f"[*] Selecting top {n} features (RF + ExtraTrees averaged)...")
+        feature_cols = self.get_feature_columns()
+        print(f"[*] Selecting top {n} features from {len(feature_cols)} candidates...")
 
-        # Filter to rows with valid data
-        df_valid = self.df_features.dropna(subset=[target_col])
-        min_year = df_valid['year'].min() + 1
-        df_valid = df_valid[df_valid['year'] >= min_year]
+        # Use all years with valid data (years >= min+1 so lags exist)
+        years = sorted(self.df_features['year'].unique())
+        train_years = years[:-1]  # all except last
+        train_data = self.df_features[self.df_features['year'].isin(train_years)]
 
-        # Get all numeric feature columns (exclude identifiers and target)
-        exclude = {'location_name', 'year', 'g_date', target_col,
-                    'incident_count_log', 'incident_count'}
-        candidates = [c for c in df_valid.select_dtypes(include=[np.number]).columns
-                       if c not in exclude]
+        X = train_data[feature_cols]
+        y = np.log1p(train_data['incident_count'])
 
-        X = df_valid[candidates].fillna(0).replace([np.inf, -np.inf], 0)
-        y = df_valid[target_col]
-
-        # Fit both models
-        rf = RandomForestRegressor(n_estimators=200, max_depth=10, random_state=42, n_jobs=-1)
-        et = ExtraTreesRegressor(n_estimators=200, max_depth=10, random_state=42, n_jobs=-1)
+        rf = RandomForestRegressor(n_estimators=500, max_depth=12, random_state=42, n_jobs=-1)
+        et = ExtraTreesRegressor(n_estimators=500, max_depth=12, random_state=42, n_jobs=-1)
         rf.fit(X, y)
         et.fit(X, y)
 
-        # Average importances
-        importance = pd.DataFrame({
-            'feature': candidates,
-            'rf_importance': rf.feature_importances_,
-            'et_importance': et.feature_importances_,
-        })
-        importance['avg_importance'] = (importance['rf_importance'] + importance['et_importance']) / 2
-        importance = importance.sort_values('avg_importance', ascending=False)
+        avg_imp = (
+            pd.Series(rf.feature_importances_, index=feature_cols)
+            + pd.Series(et.feature_importances_, index=feature_cols)
+        ) / 2
+        avg_imp = avg_imp.sort_values(ascending=False)
 
-        selected = importance.head(n)['feature'].tolist()
+        selected = avg_imp.head(n).index.tolist()
         self._selected_features = selected
 
-        print(f"    Selected {len(selected)} features")
-        for i, row in importance.head(n).iterrows():
-            print(f"      {row['feature']:30s}  {row['avg_importance']:.4f}")
+        print(f"    Selected {len(selected)} features:")
+        for i, f in enumerate(selected):
+            print(f"      {i+1:2d}. {f} ({avg_imp[f]:.4f})")
 
         return selected
 
-    def get_feature_columns(self) -> List[str]:
-        """Return the selected feature column names."""
-        if self._selected_features is not None:
-            return self._selected_features
+    # ==========================================================
+    # Full pipeline
+    # ==========================================================
 
-        # Fallback: use config defaults
-        from config.config import SELECTED_FEATURE_COLS
-        available = [c for c in SELECTED_FEATURE_COLS
-                     if self.df_features is not None and c in self.df_features.columns]
-        return available
-
-    # ==================================================================
-    # Full Pipeline
-    # ==================================================================
-
-    def build_all_features(self) -> pd.DataFrame:
-        """Run the complete feature engineering pipeline (56 features)."""
+    def build_all(self, n_features: int = 20) -> Tuple[pd.DataFrame, List[str]]:
         print("\n" + "=" * 60)
-        print("FEATURE ENGINEERING PIPELINE")
+        print("  FEATURE ENGINEERING")
         print("=" * 60 + "\n")
 
-        self.create_location_year_aggregation()
-        self.create_lag_features()
-        self.create_rolling_and_trend_features()
-        self.create_historical_stats()
-        self.create_interaction_features()
-        self.create_seasonal_features()
+        self.aggregate_location_year()
+        self.create_features()
+        self.add_high_volume_flag()
+        feature_cols = self.get_feature_columns()
+        selected = self.select_top_features(n=n_features)
 
-        # Clean up
-        self.df_features = self.df_features.replace([np.inf, -np.inf], 0).fillna(0)
-
-        n_features = len([c for c in self.df_features.select_dtypes(include=[np.number]).columns
-                          if c not in ('year', 'incident_count')])
-        print(f"\n[+] Feature engineering complete: {n_features} numeric features")
-        print(f"    Dataset shape: {self.df_features.shape}")
-
-        return self.df_features
-
-
-# Convenience function
-def create_features_for_prediction(
-    df: pd.DataFrame, select_top: int = 20
-) -> Tuple[pd.DataFrame, List[str]]:
-    """Build all features and select top-N in one call."""
-    engineer = FeatureEngineer(df)
-    df_features = engineer.build_all_features()
-    features = engineer.select_top_features(n=select_top)
-    return df_features, features
+        return self.df_features, selected

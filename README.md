@@ -6,13 +6,13 @@
   <img src="https://img.shields.io/badge/Python-3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
   <img src="https://img.shields.io/badge/scikit--learn-1.3+-F7931E?style=for-the-badge&logo=scikit-learn&logoColor=white" alt="scikit-learn">
   <img src="https://img.shields.io/badge/Model-Gradient_Boosting-success?style=for-the-badge" alt="Model">
-  <img src="https://img.shields.io/badge/R²-0.9282-blue?style=for-the-badge" alt="R²">
+  <img src="https://img.shields.io/badge/R²-0.8684-blue?style=for-the-badge" alt="R²">
   <img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" alt="License">
 </p>
 
-<p><strong>Time-series regression model predicting operational incident counts across 116 locations<br>using a heavily regularized Gradient Boosting pipeline — built on 20,000+ real-world records.</strong></p>
+<p><strong>Time-series regression model predicting operational incident counts across 129 locations<br>using a heavily regularized Gradient Boosting pipeline — built on 20,000+ real-world records.</strong></p>
 
-<p><em>Developed during a Data Science Internship at <strong>Zetta Global</strong> · February 2026</em></p>
+<p><em>Developed during a Data Science Internship at <strong>Zetta Global</strong> · February 2026 (updated April 2026)</em></p>
 
 </div>
 
@@ -22,15 +22,15 @@
 
 <table>
   <tr>
-    <td align="center"><h3>0.9282</h3><sub>R² Score</sub></td>
-    <td align="center"><h3>20.99</h3><sub>MAE</sub></td>
-    <td align="center"><h3>14.00</h3><sub>Median AE</sub></td>
-    <td align="center"><h3>30.56</h3><sub>RMSE</sub></td>
-    <td align="center"><h3>67%</h3><sub>vs Baseline</sub></td>
+    <td align="center"><h3>0.8684</h3><sub>R² Score</sub></td>
+    <td align="center"><h3>21.32</h3><sub>MAE</sub></td>
+    <td align="center"><h3>11.00</h3><sub>Median AE</sub></td>
+    <td align="center"><h3>39.85</h3><sub>RMSE</sub></td>
+    <td align="center"><h3>66%</h3><sub>vs Baseline</sub></td>
   </tr>
 </table>
 
-> The model explains **93% of variance** and reduces error by **67%** compared to a naive mean predictor.
+> The model explains **87% of variance** and reduces error by **66%** compared to a naive mean predictor.
 
 ---
 
@@ -41,7 +41,7 @@ A transportation company needed to **forecast incident volumes per location** fo
 **Pipeline:**
 
 ```
-20K+ Records ──▶ Feature Engineering (56 → 20) ──▶ Gradient Boosting ──▶ 8,744 Predictions
+20K+ Records ──▶ Feature Engineering (56 → 20) ──▶ Gradient Boosting ──▶ 7,659 Predictions
 ```
 
 **Key technical decisions:**
@@ -55,14 +55,14 @@ A transportation company needed to **forecast incident volumes per location** fo
 ## 📊 What Made It Work
 
 ```
-  Weighted Trend        ████████████████████░░░░░░░  18.4%
-  Trend Magnitude       ███████████████░░░░░░░░░░░░  15.0%
-  Peak Quarter Count    █████████████░░░░░░░░░░░░░░  13.4%
-  Key Incident (lag)    ████████████░░░░░░░░░░░░░░░  12.8%
-  Year-over-Year Trend  ████████░░░░░░░░░░░░░░░░░░░   8.2%
+  Weighted Trend        ████████████████████░░░░░░░  17.3%
+  Trend Magnitude       █████████████░░░░░░░░░░░░░░  11.2%
+  Peak Quarter Count    ████████████░░░░░░░░░░░░░░░  10.3%
+  Year-over-Year Trend  ███████████░░░░░░░░░░░░░░░░   9.9%
+  Key Incident (lag)    ██████████░░░░░░░░░░░░░░░░░   9.4%
 ```
 
-> **Interaction features** (weighted trend, trend × magnitude) drove R² from ~0.80 to 0.93 — feature engineering mattered more than model complexity.
+> **Interaction features** (weighted trend, trend × magnitude) drove R² from ~0.78 to 0.87 — feature engineering mattered more than model complexity.
 
 ---
 
@@ -115,7 +115,7 @@ python main.py --year 2027                  # different year
 
 ## 👤 Author
 
-**Nader Mohamed** · Data Science Intern · [Zetta Global](https://www.zettaglobal.com/) · February 2026
+**Nader Mohamed** · Data Science Intern · [Zetta Global](https://www.zettaglobal.com/) · February 2026 (updated April 2026)
 
 <a href="https://github.com/Nadercr7"><img src="https://img.shields.io/badge/GitHub-Nadercr7-181717?style=flat-square&logo=github" alt="GitHub"></a>
 
